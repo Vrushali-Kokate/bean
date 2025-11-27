@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Order, MenuItem, DiscountCode } from '../types';
-import { 
-    LayoutDashboard, CheckCircle, Clock, DollarSign, LogOut, RefreshCw, 
-    Coffee, Tag, Plus, Edit2, Trash2, Save, X 
+import {
+    LayoutDashboard, CheckCircle, Clock, DollarSign, LogOut, RefreshCw,
+    Coffee, Tag, Plus, Edit2, Trash2, Save, X, TrendingUp, Calendar
 } from 'lucide-react';
 import * as db from '../services/backend';
 
@@ -11,17 +11,28 @@ interface AdminDashboardProps {
 }
 
 type Tab = 'overview' | 'menu' | 'discounts';
+type StatsTimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  
+  const [statsTimePeriod, setStatsTimePeriod] = useState<StatsTimePeriod>('daily');
+
   // Data State
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [discounts, setDiscounts] = useState<DiscountCode[]>([]);
-  
+  const [stats, setStats] = useState<db.OrderStats>({
+    totalRevenue: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    averageOrderValue: 0,
+    taxCollected: 0,
+    discountsGiven: 0
+  });
+
   // Edit State
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [editingDiscount, setEditingDiscount] = useState<Partial<DiscountCode> | null>(null);
@@ -38,13 +49,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setDiscounts(loadedDiscounts);
   };
 
+  // Load Stats based on selected time period
+  const loadStats = async () => {
+    let loadedStats: db.OrderStats;
+    switch (statsTimePeriod) {
+      case 'daily':
+        loadedStats = await db.getDailyStats();
+        break;
+      case 'weekly':
+        loadedStats = await db.getWeeklyStats();
+        break;
+      case 'monthly':
+        loadedStats = await db.getMonthlyStats();
+        break;
+      case 'yearly':
+        loadedStats = await db.getYearlyStats();
+        break;
+      default:
+        loadedStats = await db.getDailyStats();
+    }
+    setStats(loadedStats);
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
-      const interval = setInterval(loadData, 5000);
+      loadStats();
+      const interval = setInterval(() => {
+        loadData();
+        loadStats();
+      }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, statsTimePeriod]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,12 +149,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       }
   };
 
-  const metrics = {
-    totalRevenue: orders.reduce((acc, o) => acc + o.total, 0),
-    taxCollected: orders.reduce((acc, o) => acc + o.tax, 0),
-    pendingOrders: orders.filter(o => o.status === 'pending').length,
-    completedOrders: orders.filter(o => o.status === 'completed').length,
-  };
+  const currentOrders = orders.filter(o => o.status === 'pending');
 
   // Common input styles
   const inputClass = "w-full border border-gray-300 p-2 rounded bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-accent focus:border-transparent outline-none";
@@ -189,13 +221,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
             <>
+            {/* Time Period Selector */}
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-serif font-bold text-coffee-900 flex items-center">
+                    <TrendingUp className="h-6 w-6 mr-2 text-accent" />
+                    Analytics Dashboard
+                </h2>
+                <div className="flex space-x-2">
+                    <button onClick={() => setStatsTimePeriod('daily')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statsTimePeriod === 'daily' ? 'bg-coffee-900 text-white' : 'bg-white text-coffee-700 border border-coffee-200 hover:bg-coffee-50'}`}>Daily</button>
+                    <button onClick={() => setStatsTimePeriod('weekly')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statsTimePeriod === 'weekly' ? 'bg-coffee-900 text-white' : 'bg-white text-coffee-700 border border-coffee-200 hover:bg-coffee-50'}`}>Weekly</button>
+                    <button onClick={() => setStatsTimePeriod('monthly')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statsTimePeriod === 'monthly' ? 'bg-coffee-900 text-white' : 'bg-white text-coffee-700 border border-coffee-200 hover:bg-coffee-50'}`}>Monthly</button>
+                    <button onClick={() => setStatsTimePeriod('yearly')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statsTimePeriod === 'yearly' ? 'bg-coffee-900 text-white' : 'bg-white text-coffee-700 border border-coffee-200 hover:bg-coffee-50'}`}>Yearly</button>
+                </div>
+            </div>
+
             {/* Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-accent">
                 <div className="flex justify-between items-start">
                 <div>
                     <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-                    <h3 className="text-2xl font-bold text-gray-900">${metrics.totalRevenue.toFixed(2)}</h3>
+                    <h3 className="text-2xl font-bold text-gray-900">${stats.totalRevenue.toFixed(2)}</h3>
                 </div>
                 <DollarSign className="h-8 w-8 text-coffee-200" />
                 </div>
@@ -203,28 +249,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
                 <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-sm font-medium text-gray-500">Tax Collected</p>
-                    <h3 className="text-2xl font-bold text-gray-900">${metrics.taxCollected.toFixed(2)}</h3>
+                    <p className="text-sm font-medium text-gray-500">Total Orders</p>
+                    <h3 className="text-2xl font-bold text-gray-900">{stats.totalOrders}</h3>
                 </div>
-                <DollarSign className="h-8 w-8 text-coffee-200" />
-                </div>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500">
-                <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-sm font-medium text-gray-500">Pending Orders</p>
-                    <h3 className="text-2xl font-bold text-gray-900">{metrics.pendingOrders}</h3>
-                </div>
-                <Clock className="h-8 w-8 text-coffee-200" />
+                <Calendar className="h-8 w-8 text-coffee-200" />
                 </div>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
                 <div className="flex justify-between items-start">
                 <div>
+                    <p className="text-sm font-medium text-gray-500">Avg Order Value</p>
+                    <h3 className="text-2xl font-bold text-gray-900">${stats.averageOrderValue.toFixed(2)}</h3>
+                </div>
+                <TrendingUp className="h-8 w-8 text-coffee-200" />
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-purple-500">
+                <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-sm font-medium text-gray-500">Tax Collected</p>
+                    <h3 className="text-2xl font-bold text-gray-900">${stats.taxCollected.toFixed(2)}</h3>
+                </div>
+                <DollarSign className="h-8 w-8 text-coffee-200" />
+                </div>
+            </div>
+            </div>
+
+            {/* Secondary Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500">
+                <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-sm font-medium text-gray-500">Pending Orders</p>
+                    <h3 className="text-2xl font-bold text-gray-900">{currentOrders.length}</h3>
+                </div>
+                <Clock className="h-8 w-8 text-coffee-200" />
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-600">
+                <div className="flex justify-between items-start">
+                <div>
                     <p className="text-sm font-medium text-gray-500">Completed</p>
-                    <h3 className="text-2xl font-bold text-gray-900">{metrics.completedOrders}</h3>
+                    <h3 className="text-2xl font-bold text-gray-900">{stats.completedOrders}</h3>
                 </div>
                 <CheckCircle className="h-8 w-8 text-coffee-200" />
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500">
+                <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-sm font-medium text-gray-500">Discounts Given</p>
+                    <h3 className="text-2xl font-bold text-gray-900">${stats.discountsGiven.toFixed(2)}</h3>
+                </div>
+                <Tag className="h-8 w-8 text-coffee-200" />
                 </div>
             </div>
             </div>
