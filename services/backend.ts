@@ -1,66 +1,54 @@
+
 import { MenuItem, Order, DiscountCode } from '../types';
-import { supabase } from './supabase';
+import { db } from './firebase'; // Use db from firebase
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy,
+  getDoc,
+  updateDoc
+} from 'firebase/firestore';
 
 /**
- * SUPABASE BACKEND SERVICE
+ * FIREBASE BACKEND SERVICE
  *
- * This service connects to Supabase for all data operations.
- * All data is persisted in the cloud and synchronized in real-time.
+ * This service connects to Firebase Firestore for all data operations.
  */
 
 // --- MENU OPERATIONS ---
 
 export const getMenu = async (): Promise<MenuItem[]> => {
-  const { data, error } = await supabase
-    .from('menu_items')
-    .select('*')
-    .order('category', { ascending: true });
-
-  if (error) {
+  try {
+    const q = query(collection(db, 'menu_items'), orderBy('category'));
+    const querySnapshot = await getDocs(q);
+    const menu = querySnapshot.docs.map(doc => doc.data() as MenuItem);
+    return menu;
+  } catch (error) {
     console.error('Error fetching menu:', error);
     return [];
   }
-
-  return data.map(item => ({
-    id: item.id,
-    name: item.name,
-    description: item.description || '',
-    price: Number(item.price),
-    category: item.category,
-    image: item.image || '',
-    calories: item.calories || 0,
-    available: item.available !== false
-  }));
 };
 
 export const saveMenuItem = async (item: MenuItem): Promise<void> => {
-  const { error } = await supabase
-    .from('menu_items')
-    .upsert({
-      id: item.id,
-      name: item.name,
-      description: item.description || '',
-      price: item.price,
-      category: item.category,
-      image: item.image || '',
-      calories: item.calories || 0,
-      available: item.available !== false,
-      updated_at: new Date().toISOString()
-    });
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'menu_items', item.id);
+    await setDoc(docRef, item, { merge: true });
+  } catch (error) {
     console.error('Error saving menu item:', error);
     throw error;
   }
 };
 
 export const deleteMenuItem = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('menu_items')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'menu_items', id);
+    await deleteDoc(docRef);
+  } catch (error) {
     console.error('Error deleting menu item:', error);
     throw error;
   }
@@ -69,64 +57,32 @@ export const deleteMenuItem = async (id: string): Promise<void> => {
 // --- ORDER OPERATIONS ---
 
 export const getOrders = async (): Promise<Order[]> => {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*')
-    .order('date', { ascending: false });
-
-  if (error) {
+  try {
+    const q = query(collection(db, 'orders'), orderBy('date', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const orders = querySnapshot.docs.map(doc => doc.data() as Order);
+    return orders;
+  } catch (error) {
     console.error('Error fetching orders:', error);
     return [];
   }
-
-  return data.map(order => ({
-    id: order.id,
-    date: order.date,
-    items: order.items,
-    subtotal: Number(order.subtotal),
-    discountCode: order.discount_code,
-    discountAmount: Number(order.discount_amount),
-    tax: Number(order.tax),
-    total: Number(order.total),
-    tableNumber: order.table_number,
-    customerName: order.customer_name,
-    status: order.status
-  }));
 };
 
 export const createOrder = async (order: Order): Promise<void> => {
-  const { error } = await supabase
-    .from('orders')
-    .insert({
-      id: order.id,
-      date: order.date,
-      items: order.items,
-      subtotal: order.subtotal,
-      discount_code: order.discountCode,
-      discount_amount: order.discountAmount,
-      tax: order.tax,
-      total: order.total,
-      table_number: order.tableNumber,
-      customer_name: order.customerName,
-      status: order.status
-    });
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'orders', order.id);
+    await setDoc(docRef, order);
+  } catch (error) {
     console.error('Error creating order:', error);
     throw error;
   }
 };
 
 export const updateOrderStatus = async (orderId: string, status: 'completed'): Promise<void> => {
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      status,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', orderId);
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'orders', orderId);
+    await updateDoc(docRef, { status: status, updatedAt: new Date().toISOString() });
+  } catch (error) {
     console.error('Error updating order status:', error);
     throw error;
   }
@@ -135,95 +91,65 @@ export const updateOrderStatus = async (orderId: string, status: 'completed'): P
 // --- DISCOUNT OPERATIONS ---
 
 export const getDiscounts = async (): Promise<DiscountCode[]> => {
-  const { data, error } = await supabase
-    .from('discount_codes')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
+  try {
+    const q = query(collection(db, 'discount_codes'), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const discounts = querySnapshot.docs.map(doc => doc.data() as DiscountCode);
+    return discounts;
+  } catch (error) {
     console.error('Error fetching discounts:', error);
     return [];
   }
-
-  return data.map(discount => ({
-    id: discount.id,
-    code: discount.code,
-    type: discount.type as 'percent' | 'fixed',
-    value: Number(discount.value),
-    active: discount.active !== false
-  }));
 };
 
 export const saveDiscount = async (discount: DiscountCode): Promise<void> => {
-  const { error } = await supabase
-    .from('discount_codes')
-    .upsert({
-      id: discount.id,
-      code: discount.code.toUpperCase(),
-      type: discount.type,
-      value: discount.value,
-      active: discount.active !== false,
-      updated_at: new Date().toISOString()
-    });
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'discount_codes', discount.id);
+    await setDoc(docRef, { ...discount, code: discount.code.toUpperCase() }, { merge: true });
+  } catch (error) {
     console.error('Error saving discount:', error);
     throw error;
   }
 };
 
 export const deleteDiscount = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('discount_codes')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
+  try {
+    const docRef = doc(db, 'discount_codes', id);
+    await deleteDoc(docRef);
+  } catch (error) {
     console.error('Error deleting discount:', error);
     throw error;
   }
 };
 
 export const validateDiscountCode = async (code: string): Promise<DiscountCode | null> => {
-  const { data, error } = await supabase
-    .from('discount_codes')
-    .select('*')
-    .ilike('code', code)
-    .eq('active', true)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const q = query(collection(db, 'discount_codes'), where('code', '==', code.toUpperCase()), where('active', '==', true));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return null;
+    }
+    const doc = querySnapshot.docs[0];
+    return doc.data() as DiscountCode;
+  } catch (error) {
     console.error('Error validating discount code:', error);
     return null;
   }
-
-  if (!data) return null;
-
-  return {
-    id: data.id,
-    code: data.code,
-    type: data.type as 'percent' | 'fixed',
-    value: Number(data.value),
-    active: data.active
-  };
 };
 
 // --- CATEGORY OPERATIONS ---
 
 export const getCategories = async (): Promise<string[]> => {
-  const { data, error } = await supabase
-    .from('menu_items')
-    .select('category')
-    .order('category', { ascending: true });
-
-  if (error) {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'menu_items'));
+    const categories = new Set(querySnapshot.docs.map(doc => doc.data().category));
+    return Array.from(categories).sort();
+  } catch (error) {
     console.error('Error fetching categories:', error);
     return [];
   }
-
-  const categories = new Set(data.map(item => item.category));
-  return Array.from(categories);
 };
+
 
 // --- STATISTICS OPERATIONS ---
 
@@ -238,13 +164,29 @@ export interface OrderStats {
 }
 
 export const getOrderStats = async (startDate: Date, endDate: Date): Promise<OrderStats> => {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*')
-    .gte('date', startDate.toISOString())
-    .lte('date', endDate.toISOString());
+  try {
+    const q = query(collection(db, 'orders'), where('date', '>=', startDate.toISOString()), where('date', '<=', endDate.toISOString()));
+    const querySnapshot = await getDocs(q);
+    const orders = querySnapshot.docs.map(doc => doc.data() as Order);
 
-  if (error) {
+    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+    const totalOrders = orders.length;
+    const pendingOrders = orders.filter(o => o.status === 'pending').length;
+    const completedOrders = orders.filter(o => o.status === 'completed').length;
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const taxCollected = orders.reduce((sum, order) => sum + order.tax, 0);
+    const discountsGiven = orders.reduce((sum, order) => sum + order.discountAmount, 0);
+
+    return {
+      totalRevenue,
+      totalOrders,
+      pendingOrders,
+      completedOrders,
+      averageOrderValue,
+      taxCollected,
+      discountsGiven,
+    };
+  } catch (error) {
     console.error('Error fetching order stats:', error);
     return {
       totalRevenue: 0,
@@ -253,27 +195,9 @@ export const getOrderStats = async (startDate: Date, endDate: Date): Promise<Ord
       completedOrders: 0,
       averageOrderValue: 0,
       taxCollected: 0,
-      discountsGiven: 0
+      discountsGiven: 0,
     };
   }
-
-  const totalRevenue = data.reduce((sum, order) => sum + Number(order.total), 0);
-  const totalOrders = data.length;
-  const pendingOrders = data.filter(o => o.status === 'pending').length;
-  const completedOrders = data.filter(o => o.status === 'completed').length;
-  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const taxCollected = data.reduce((sum, order) => sum + Number(order.tax), 0);
-  const discountsGiven = data.reduce((sum, order) => sum + Number(order.discount_amount), 0);
-
-  return {
-    totalRevenue,
-    totalOrders,
-    pendingOrders,
-    completedOrders,
-    averageOrderValue,
-    taxCollected,
-    discountsGiven
-  };
 };
 
 export const getDailyStats = async (): Promise<OrderStats> => {
@@ -312,3 +236,4 @@ export const getYearlyStats = async (): Promise<OrderStats> => {
 
   return getOrderStats(startOfYear, endOfYear);
 };
+
