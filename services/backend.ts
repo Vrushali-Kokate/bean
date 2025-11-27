@@ -237,3 +237,7 @@ export const getYearlyStats = async (): Promise<OrderStats> => {
   return getOrderStats(startOfYear, endOfYear);
 };
 
+
+export function seedDatabase() {
+  throw new Error('Function not implemented.');
+}

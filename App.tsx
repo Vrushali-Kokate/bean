@@ -182,6 +182,8 @@ const App: React.FC = () => {
           onAddToCart={handleAddToCart}
           highlightedItemId={highlightedItemId}
         />
+        
+
       </main>
 
       <footer className="bg-coffee-900 text-coffee-200 py-12 relative z-10">
